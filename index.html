@@ -331,7 +331,7 @@
 
         <div class="controls">
           <div class="control-row">
-            <div class="control-group">
+            <!-- <div class="control-group">
               <label for="appid">App ID *</label>
               <input
                 type="text"
@@ -340,7 +340,7 @@
                 value="a4daaf2959744f1c989b869f075fb798"
                 readonly
                 style="background: #f0f0f0" />
-            </div>
+            </div> -->
             <div class="control-group">
               <label for="channel">채널 이름 *</label>
               <input
@@ -366,13 +366,13 @@
             <button class="btn-leave" id="leave" disabled>
               채널 나가기 (Leave Channel)
             </button>
-            <button
+            <!-- <button
               class="btn-unpublish"
               id="unpublish"
               disabled
               style="display: none">
               스트리밍 중지 (Stop Streaming)
-            </button>
+            </button> -->
           </div>
         </div>
 
@@ -425,7 +425,7 @@
 
       // 채널 참가
       async function join() {
-        const appId = appIdInput.value.trim();
+        const appId = "a4daaf2959744f1c989b869f075fb798";
         const channel = channelInput.value.trim();
         const role = roleSelect.value;
 
@@ -470,8 +470,8 @@
             // Host인 경우: 자동으로 로컬 트랙 생성 및 스트리밍 시작
             await createLocalTracks();
             await publish();
-            unpublishBtn.disabled = false;
-            unpublishBtn.style.display = "block";
+            // unpublishBtn.disabled = false;
+            // unpublishBtn.style.display = "block";
           } else {
             // Audience인 경우: Host(UID 1004)를 자동으로 구독
             showStatus("📺 스트리머를 찾는 중...", "info");
@@ -593,7 +593,7 @@
           // UI 초기화
           joinBtn.disabled = false;
           leaveBtn.disabled = true;
-          unpublishBtn.disabled = true;
+          //   unpublishBtn.disabled = true;
         } catch (error) {
           console.error("채널 나가기 실패:", error);
           showStatus(`❌ 채널 나가기 실패: ${error.message}`, "error");
