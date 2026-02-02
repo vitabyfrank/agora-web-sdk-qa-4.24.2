@@ -160,10 +160,20 @@
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
       }
 
+      .video-player > div#local-player,
+      .video-player > div[id^="player-"] {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+
       .video-player video {
         width: 100%;
         height: 100%;
         object-fit: cover;
+        display: block;
       }
 
       .video-label {
@@ -177,6 +187,7 @@
         font-weight: 600;
         font-size: 0.9em;
         backdrop-filter: blur(10px);
+        z-index: 10;
       }
 
       .video-label.local {
@@ -198,6 +209,7 @@
         border-radius: 8px;
         font-size: 0.85em;
         backdrop-filter: blur(10px);
+        z-index: 10;
       }
 
       .status {
@@ -307,12 +319,13 @@
             App ID가 이미 설정되어 있습니다. 바로 시작하실 수 있습니다!
             <br /><br />
             <strong>역할 선택:</strong>
-            <br />• <code>host</code>: 스트리머 (카메라/마이크 송출 가능)
-            <br />• <code>audience</code>: 시청자 (시청만 가능) <br /><br />
-            <strong>테스트 방법:</strong>
-            <br />1. 브라우저 탭을 2개 열어주세요 <br />2. 첫 번째 탭: Host로
-            설정 → 채널 참가 → 스트리밍 시작 <br />3. 두 번째 탭: Audience로
-            설정 → 같은 채널명으로 참가
+            <br />• <code>Host</code>: 스트리머 (UID 1004 고정, 1명만 가능)
+            <br />• <code>Audience</code>: 시청자 (자동으로 Host의 방송 시청)
+            <br /><br />
+            <strong>사용 방법:</strong>
+            <br />1. 첫 번째 탭: Host로 설정 → 채널 참가 (자동 스트리밍 시작)
+            <br />2. 두 번째 탭: Audience로 설정 → 같은 채널명으로 참가 (자동
+            시청) <br />3. Host는 한 채널에 1명만 허용됩니다
           </p>
         </div>
 
@@ -340,9 +353,9 @@
 
           <div class="control-row">
             <div class="control-group">
-              <label for="role">역할 *</label>
+              <label for="role">역할 선택 *</label>
               <select id="role">
-                <option value="host">Host (스트리머)</option>
+                <option value="host">Host (스트리머 - UID 1004)</option>
                 <option value="audience">Audience (시청자)</option>
               </select>
             </div>
@@ -353,10 +366,11 @@
             <button class="btn-leave" id="leave" disabled>
               채널 나가기 (Leave Channel)
             </button>
-            <button class="btn-publish" id="publish" disabled>
-              스트리밍 시작 (Start Streaming)
-            </button>
-            <button class="btn-unpublish" id="unpublish" disabled>
+            <button
+              class="btn-unpublish"
+              id="unpublish"
+              disabled
+              style="display: none">
               스트리밍 중지 (Stop Streaming)
             </button>
           </div>
@@ -366,9 +380,10 @@
 
         <!-- 로컬 비디오 -->
         <div class="video-container" id="local-container" style="display: none">
-          <div class="video-player" id="local-player">
+          <div class="video-player">
+            <div id="local-player"></div>
             <div class="video-label local">내 화면 (로컬)</div>
-            <div class="stats" id="local-stats"></div>
+            <!-- <div class="stats" id="local-stats"></div> -->
           </div>
         </div>
 
@@ -395,7 +410,6 @@
       const roleSelect = document.getElementById("role");
       const joinBtn = document.getElementById("join");
       const leaveBtn = document.getElementById("leave");
-      const publishBtn = document.getElementById("publish");
       const unpublishBtn = document.getElementById("unpublish");
       const statusDiv = document.getElementById("status");
       const localContainer = document.getElementById("local-container");
@@ -420,41 +434,52 @@
           return;
         }
 
-         try {
-           showStatus("🔄 채널에 참가 중...");
- 
-           // 클라이언트 생성
-           client = AgoraRTC.createClient({
-             mode: "live",
-             codec: "vp8",
-             role: role,
-           });
+        try {
+          showStatus("🔄 채널에 참가 중...");
 
-           // 이벤트 리스너 등록
-           registerClientEvents();
+          // 클라이언트 생성
+          client = AgoraRTC.createClient({
+            mode: "live",
+            codec: "vp8",
+            role: role,
+          });
 
-           // 채널 참가
-           const uid = await client.join(appId, channel, null, null);
-           showStatus(
-             `✅ 채널 "${channel}"에 참가했습니다! (UID: ${uid})`,
-             "success",
-           );
+          // 이벤트 리스너 등록
+          registerClientEvents();
 
-           // UI 업데이트
-           joinBtn.disabled = true;
-           leaveBtn.disabled = false;
+          // 채널 참가
+          let uid;
+          if (role === "host") {
+            // Host는 UID 1004로 고정
+            uid = await client.join(appId, channel, null, 1004);
+          } else {
+            // Audience는 랜덤 UID
+            uid = await client.join(appId, channel, null, null);
+          }
 
-           // Host인 경우 자동으로 로컬 트랙 생성 및 스트리밍 시작
-           if (role === "host") {
-             await createLocalTracks();
-             await publish();
-             publishBtn.disabled = true;
-             unpublishBtn.disabled = false;
-           }
-         } catch (error) {
-           console.error("채널 참가 실패:", error);
-           showStatus(`❌ 채널 참가 실패: ${error.message}`, "error");
-         }
+          showStatus(
+            `✅ 채널 "${channel}"에 참가했습니다! (UID: ${uid}, 역할: ${role === "host" ? "스트리머" : "시청자"})`,
+            "success",
+          );
+
+          // UI 업데이트
+          joinBtn.disabled = true;
+          leaveBtn.disabled = false;
+
+          if (role === "host") {
+            // Host인 경우: 자동으로 로컬 트랙 생성 및 스트리밍 시작
+            await createLocalTracks();
+            await publish();
+            unpublishBtn.disabled = false;
+            unpublishBtn.style.display = "block";
+          } else {
+            // Audience인 경우: Host(UID 1004)를 자동으로 구독
+            showStatus("📺 스트리머를 찾는 중...", "info");
+          }
+        } catch (error) {
+          console.error("채널 참가 실패:", error);
+          showStatus(`❌ 채널 참가 실패: ${error.message}`, "error");
+        }
       }
 
       // 로컬 트랙 생성
@@ -491,33 +516,33 @@
           showStatus("✅ 카메라와 마이크가 준비되었습니다.", "success");
 
           // 통계 업데이트 시작
-          updateLocalStats();
+          //   updateLocalStats();
         } catch (error) {
           console.error("로컬 트랙 생성 실패:", error);
           showStatus(`❌ 미디어 장치 접근 실패: ${error.message}`, "error");
         }
       }
 
-       // 스트리밍 시작 (발행)
-       async function publish() {
-         if (!localTracks.audioTrack || !localTracks.videoTrack) {
-           await createLocalTracks();
-         }
+      // 스트리밍 시작 (발행)
+      async function publish() {
+        if (!localTracks.audioTrack || !localTracks.videoTrack) {
+          await createLocalTracks();
+        }
 
-         try {
-           showStatus("📡 스트리밍을 시작하는 중...");
+        try {
+          showStatus("📡 스트리밍을 시작하는 중...");
 
-           await client.publish([
-             localTracks.audioTrack,
-             localTracks.videoTrack,
-           ]);
+          await client.publish([
+            localTracks.audioTrack,
+            localTracks.videoTrack,
+          ]);
 
-           showStatus("✅ 라이브 스트리밍이 시작되었습니다! 🎬", "success");
-         } catch (error) {
-           console.error("발행 실패:", error);
-           showStatus(`❌ 스트리밍 시작 실패: ${error.message}`, "error");
-         }
-       }
+          showStatus("✅ 라이브 스트리밍이 시작되었습니다! 🎬", "success");
+        } catch (error) {
+          console.error("발행 실패:", error);
+          showStatus(`❌ 스트리밍 시작 실패: ${error.message}`, "error");
+        }
+      }
 
       // 스트리밍 중지 (발행 취소)
       async function unpublish() {
@@ -568,7 +593,6 @@
           // UI 초기화
           joinBtn.disabled = false;
           leaveBtn.disabled = true;
-          publishBtn.disabled = true;
           unpublishBtn.disabled = true;
         } catch (error) {
           console.error("채널 나가기 실패:", error);
@@ -580,7 +604,17 @@
       function registerClientEvents() {
         // 사용자 발행
         client.on("user-published", async (user, mediaType) => {
-          console.log("사용자 발행:", user.uid, mediaType);
+          console.log("🔔 사용자 발행:", user.uid, mediaType);
+          console.log("현재 역할:", roleSelect.value);
+
+          // Audience 모드이고 Host(UID 1004)가 발행하면 자동 구독
+          if (roleSelect.value === "audience" && user.uid === 1004) {
+            showStatus(
+              `✅ 스트리머를 찾았습니다! (UID: ${user.uid})`,
+              "success",
+            );
+          }
+
           await subscribe(user, mediaType);
         });
 
@@ -588,7 +622,9 @@
         client.on("user-unpublished", (user, mediaType) => {
           console.log("사용자 발행 취소:", user.uid, mediaType);
           if (mediaType === "video") {
-            const playerDiv = document.getElementById(`player-${user.uid}`);
+            const playerDiv = document.getElementById(
+              `player-wrapper-${user.uid}`,
+            );
             if (playerDiv) {
               playerDiv.remove();
             }
@@ -599,9 +635,16 @@
         client.on("user-left", user => {
           console.log("사용자 나감:", user.uid);
           delete remoteUsers[user.uid];
-          const playerDiv = document.getElementById(`player-${user.uid}`);
+          const playerDiv = document.getElementById(
+            `player-wrapper-${user.uid}`,
+          );
           if (playerDiv) {
             playerDiv.remove();
+          }
+
+          // Host가 나간 경우
+          if (user.uid === 1004 && roleSelect.value === "audience") {
+            showStatus("⚠️ 스트리머가 방송을 종료했습니다.", "error");
           }
         });
 
@@ -626,40 +669,47 @@
       // 원격 사용자 구독
       async function subscribe(user, mediaType) {
         try {
+          console.log("⏳ 구독 시작:", user.uid, mediaType);
           await client.subscribe(user, mediaType);
-          console.log("구독 성공:", user.uid, mediaType);
+          console.log("✅ 구독 성공:", user.uid, mediaType);
 
           if (mediaType === "video") {
+            console.log("🎥 비디오 재생 시작:", user.uid);
             const playerDiv =
               document.getElementById(`player-${user.uid}`) ||
               createRemotePlayerDiv(user.uid);
             user.videoTrack.play(`player-${user.uid}`);
+            console.log("✅ 비디오 재생 완료:", user.uid);
           }
 
           if (mediaType === "audio") {
+            console.log("🔊 오디오 재생:", user.uid);
             user.audioTrack.play();
           }
 
           remoteUsers[user.uid] = user;
         } catch (error) {
-          console.error("구독 실패:", error);
+          console.error("❌ 구독 실패:", error);
+          showStatus(`❌ 구독 실패: ${error.message}`, "error");
         }
       }
 
       // 원격 사용자 플레이어 생성
       function createRemotePlayerDiv(uid) {
+        console.log("📺 원격 플레이어 생성:", uid);
         const playerDiv = document.createElement("div");
         playerDiv.id = `player-wrapper-${uid}`;
         playerDiv.className = "video-player";
         playerDiv.innerHTML = `
-                <div id="player-${uid}"></div>
-                <div class="video-label remote">사용자 ${uid}</div>
-                <div class="stats" id="stats-${uid}"></div>
-            `;
+                 <div id="player-${uid}"></div>
+                 <div class="video-label remote">${uid === 1004 ? "스트리머 (Host)" : `사용자 ${uid}`}</div>
+                 `;
+        //  <div class="stats" id="stats-${uid}"></div>
         remoteUsersDiv.appendChild(playerDiv);
+        console.log("✅ 원격 플레이어 DOM 추가 완료:", uid);
 
         // 원격 사용자 통계 업데이트
-        updateRemoteStats(uid);
+        // updateRemoteStats(uid);
 
         return `player-${uid}`;
       }
@@ -687,8 +737,7 @@
             if (statsDiv) {
               statsDiv.innerHTML = `
                             📊 해상도: ${stats.receiveResolutionWidth}x${stats.receiveResolutionHeight} | 
-                            프레임: ${stats.receiveFrameRate} fps | 
-                            딜레이: ${stats.receiveDelay}ms
+                            프레임: ${stats.receiveFrameRate} fps 
                         `;
             }
           }
@@ -698,19 +747,7 @@
       // 이벤트 리스너
       joinBtn.addEventListener("click", join);
       leaveBtn.addEventListener("click", leave);
-      publishBtn.addEventListener("click", publish);
       unpublishBtn.addEventListener("click", unpublish);
-
-      // 역할 변경 시
-      roleSelect.addEventListener("change", e => {
-        if (e.target.value === "audience") {
-          publishBtn.style.display = "none";
-          unpublishBtn.style.display = "none";
-        } else {
-          publishBtn.style.display = "block";
-          unpublishBtn.style.display = "block";
-        }
-      });
 
       // 페이지 언로드 시 정리
       window.addEventListener("beforeunload", () => {
@@ -721,7 +758,7 @@
 
       // 초기 메시지
       showStatus(
-        '채널 이름을 입력하고 역할을 선택한 후 "채널 참가" 버튼을 클릭하세요.',
+        '👋 역할을 선택하고 채널 이름을 입력한 후 "채널 참가" 버튼을 클릭하세요.',
       );
     </script>
   </body>
